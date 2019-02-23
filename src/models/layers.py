@@ -1,5 +1,5 @@
-from keras import backend as K
-from keras.engine.topology import Layer
+from tensorflow.python.keras import backend as K
+from tensorflow.python.keras.layers import Layer
 
 if K.backend() == 'tensorflow':
     import tensorflow as tf
@@ -23,22 +23,47 @@ class BilinearInterpolation(Layer):
     [3]  https://github.com/EderSantana/seya
     """
 
-    def __init__(self, output_size, **kwargs):
-        self.output_size = output_size
+    def __init__(self, output_dim, **kwargs):
+        self.output_dim = output_dim
+
+        ## incorporating build method
+        print("__init__ called")
+        print(output_dim)
         super(BilinearInterpolation, self).__init__(**kwargs)
+        # super(Layer, self).__init__(**kwargs)
+        # self.output_shape = self.compute_output_shape(self.input_shape)
+        # super().__init__(**kwargs)
+        # super().__init__()
+        ## Added when adding build method based on
+        ## https://keunwoochoi.wordpress.com/2016/11/18/for-beginners-writing-a-custom-keras-layer/
+        # self.input_spec = [InputSpec(ndim=4)]
 
     def compute_output_shape(self, input_shapes):
-        height, width = self.output_size
+        print("compute_output_shape called")
+        height, width = self.output_dim
         num_channels = input_shapes[0][-1]
         return (None, height, width, num_channels)
 
     def call(self, tensors, mask=None):
         X, transformation = tensors
-        output = self._transform(X, transformation, self.output_size)
+        output = self._transform(X, transformation, self.output_dim)
         return output
 
-    def _interpolate(self, image, sampled_grids, output_size):
+    def build(self, input_shape):
+        print("build called")
+        # self.input_spec = [InputSpec(shape=input_shape)]
 
+        ## From Keras example
+        assert isinstance(input_shape, list)
+        # Create a trainable weight variable for this layer.
+        # self.kernel = self.add_weight(name='kernel',
+        #                               shape=(input_shape[0][1], self.output_dim),
+        #                               initializer='uniform',
+        #                               trainable=True)
+        super(BilinearInterpolation, self).build(input_shape)
+
+    def _interpolate(self, image, sampled_grids, output_dim):
+        print("_interpolate called")
         batch_size = K.shape(image)[0]
         height = K.shape(image)[1]
         width = K.shape(image)[2]
@@ -65,8 +90,8 @@ class BilinearInterpolation(Layer):
 
         pixels_batch = K.arange(0, batch_size) * (height * width)
         pixels_batch = K.expand_dims(pixels_batch, axis=-1)
-        flat_output_size = output_size[0] * output_size[1]
-        base = K.repeat_elements(pixels_batch, flat_output_size, axis=1)
+        flat_output_dim = output_dim[0] * output_dim[1]
+        base = K.repeat_elements(pixels_batch, flat_output_dim, axis=1)
         base = K.flatten(base)
 
         # base_y0 = base + (y0 * width)
@@ -105,6 +130,7 @@ class BilinearInterpolation(Layer):
         return values_a + values_b + values_c + values_d
 
     def _make_regular_grids(self, batch_size, height, width):
+        print("_make_regular_grids called")
         # making a single regular grid
         x_linspace = K_linspace(-1., 1., width)
         y_linspace = K_linspace(-1., 1., height)
@@ -119,14 +145,15 @@ class BilinearInterpolation(Layer):
         grids = K.tile(grid, K.stack([batch_size]))
         return K.reshape(grids, (batch_size, 3, height * width))
 
-    def _transform(self, X, affine_transformation, output_size):
+    def _transform(self, X, affine_transformation, output_dim):
+        print("_transform called")
         batch_size, num_channels = K.shape(X)[0], K.shape(X)[3]
         transformations = K.reshape(affine_transformation,
                                     shape=(batch_size, 2, 3))
         # transformations = K.cast(affine_transformation[:, 0:2, :], 'float32')
-        regular_grids = self._make_regular_grids(batch_size, *output_size)
+        regular_grids = self._make_regular_grids(batch_size, *output_dim)
         sampled_grids = K.batch_dot(transformations, regular_grids)
-        interpolated_image = self._interpolate(X, sampled_grids, output_size)
-        new_shape = (batch_size, output_size[0], output_size[1], num_channels)
+        interpolated_image = self._interpolate(X, sampled_grids, output_dim)
+        new_shape = (batch_size, output_dim[0], output_dim[1], num_channels)
         interpolated_image = K.reshape(interpolated_image, new_shape)
         return interpolated_image

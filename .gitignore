@@ -1,3 +1,6 @@
-
-src/__pycache__
-src/.ipynb_checkpoints
+**/**/__pycache__
+.python-version
+Pipfile
+Pipfile.lock
+datasets/
+**/.ipynb_checkpoints
